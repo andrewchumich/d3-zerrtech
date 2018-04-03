@@ -1,3 +1,7 @@
+//////////////////////////
+// Set up data and util functions
+//////////////////////////
+
 
 /**
  * Convert string to hex color
@@ -15,7 +19,7 @@ var stringToColor = function(str) {
       color += ('00' + value.toString(16)).substr(-2);
     }
     return color;
-  }
+}
 
 /**
  * @typedef {Object} City
@@ -31,57 +35,57 @@ const DATA = [
     {
         city: 'New York City',
         country: 'US',
-        population: 8175.133,
+        population: 8175133,
     },
     {
         city: 'Denver',
         country: 'US',
-        population: 600.158,
+        population: 600158,
     },
     {
         city: 'Dallas',
         country: 'US',
-        population: 1197.816,
+        population: 1197816,
     },
     {
         city: 'Portland',
         country: 'US',
-        population: 583.776,
+        population: 583776,
     },
     {
         city: 'Manchester',
         country: 'UK',
-        population: 2553.379,
+        population: 2553379,
     },
     {
         city: 'London',
         country: 'UK',
-        population: 9787.426,
+        population: 9787426,
     },
     {
         city: 'Nottingham',
         country: 'UK',
-        population: 729.997,
+        population: 729997,
     },
     {
         city: 'Salvador',
         country: 'BR',
-        population: 2480.790,
+        population: 2480790,
     },
-    {
-        city: 'Salvador',
+/*     {
+        city: 'BR',
         country: 'BR',
-        population: 2480.790,
-    },
+        population: 2480790,
+    }, */
     {
         city: 'Rio de Janeiro',
         country: 'BR',
-        population: 5940.224,
+        population: 5940224,
     },
     {
         city: 'Fortaleza',
         country: 'BR',
-        population: 2315.116,
+        population: 2315116,
     },
 ];
 
@@ -95,20 +99,30 @@ const DATA = [
 /**
  * @param {City[]} cities
  * @param {string} group_key
+ * @returns {ChartConfigItem[]}
  */
-function convertToConfig(cities, group_key) {
-    const config = cities.reduce((prev, curr) => {
-        const key = curr[group_key] || 'N/A';
+function convertToConfig(cities, group_keys) {
+    const config = cities.reduce((prev, city) => {
+        const key = group_keys.reduce((prev, k, i, a) => {
+            if (prev === 'N/A') {
+                return prev;
+            } else if (city.hasOwnProperty(k)) {
+                return prev + city[k];
+            } else {
+                return 'N/A';
+            }
+        }, '');
+
         if (!prev.has(key)) {
             prev.set(key, {
-                ...curr,
+                ...city,
                 key: key,
             });
         } else {
-            const city = prev.get(key);
+            const place = prev.get(key);
             prev.set(key, {
-                ...city,
-                population: city.population + curr.population,
+                ...place,
+                population: place.population + city.population,
             });
         }
         return prev;
@@ -117,14 +131,156 @@ function convertToConfig(cities, group_key) {
     return [...config.values()];
 }
 
-console.log(convertToConfig(DATA, 'country'));
 
-function update() {
-    // select all items
+//////////////////////////
+// D3 Stuff
+//////////////////////////
+
+// set margins
+var margins = {
+    top: 20,
+    right: 40,
+    bottom: 65,
+    left: 65
+};
+
+// calculate visualization width and height
+const width = 900 - margins.left - margins.right;
+const height = 425 - margins.top - margins.bottom;
+
+// create svg element and set width height
+var svg = d3.select('div.viz')
+    .append('svg')
+    .attr('width', width + margins.left + margins.right)
+    .attr('height', height + margins.top + margins.bottom)
+    .append('g')
+    .attr('width', width)
+    .attr('height', height)
+    .attr('transform', 'translate(' + margins.left + ',' + margins.top + ')')
+    .attr('class', 'viz-group');
+
+// create a group for the bars
+var barChartGroup = svg.append('g')
+    .attr('class', 'bars-main-group');
+
+// initialize x scale
+var xScale = d3.scaleBand()
+    .range([0, width])
+    .padding(0.3)
+    ;
+
+// initialize y scale
+var yScale = d3.scaleLinear()
+    .domain([0, 1])
+    .clamp(true)
+    .range([height, 0])
+    ;
+
+var xAxis = svg
+    .append('g')
+    .attr('class', 'x-axis')
+    .attr('transform', 'translate(0,' + height + ')')
+    .call(d3.axisBottom(xScale))
+    ;
+
+var yAxis = svg
+    .append('g')
+    .attr('class', 'y-axis')
+    .call(d3.axisLeft(yScale).tickFormat(d3.format('.2s')))
+    ;
+
+/**
+ * Main render function
+ * @param {ChartConfigItem[]} config configuration
+ */
+function render(config, onClick) {
+    var DURATION = 500;
+    var t = d3.transition()
+        .duration(DURATION)
+        ;
+        
+    // SET SCALES
+    xScale
+        .domain(config.map(function(d) {
+            return d.key;
+        }));
+
+    yScale
+        .domain([0, d3.max(config, function(d) {
+            return d.population;
+        })])
+        ;
+
+    yAxis
+        .transition(t)
+        .call(d3.axisLeft(yScale).tickFormat(d3.format('.2s')))
+        ;
+
+    xAxis
+        .call(d3.axisBottom(xScale))
+        ;
+
+    // select update 
+    let update = barChartGroup
+        .selectAll('g.bar-group')
+        .data(config, function(d) {
+            return d.key;
+        })
+        ;
+    
+    // exit
+    update
+        .exit()
+        .remove();
 
     // enter
+    var enter = update
+        .enter()
+        // create group
+        .append('g')
+            .attr('class', 'bar-group')
+            // move group to correct x location
+            .attr('transform', function(d) {
+                return ['translate(' + xScale(d.key) + ',' + height + ')'];
+            })
+            .append('rect')
+                .attr('class', 'bar')
+                .attr('fill', (d) => stringToColor(d.key))
+                .attr('width', xScale.bandwidth())
+                .attr('height', 0)
+                .attr('y', 0)
+                .on('click', (d) => onClick(d))
+                .transition(t)
+                .attr('height', (d) => (height - yScale(d.population)))
+                .attr('y', (d) => (yScale(d.population) - height))
+
+            
 
     // update
-
-    // exit
+    update
+        .transition(t)
+        .attr('transform', function(d) {
+            return ['translate(' + xScale(d.key) + ',' + height + ')'];
+        })
+        .select('.bar')
+            .attr('width', xScale.bandwidth())
+            .attr('height', (d) =>  (height - yScale(d.population)))
+            .attr('y', (d) => (yScale(d.population) - height))
+        ;
 }
+
+function renderCities(country) {
+    const CONFIG = convertToConfig(DATA.filter((v) => v.country === (country || v.country)), ['city']);
+    render(CONFIG, function(d) {
+        renderCountries();
+    });
+}
+
+function renderCountries() {
+    const CONFIG = convertToConfig(DATA, ['country']);
+    render(CONFIG, function(d) {
+        renderCities(d.country);
+    });
+}
+
+renderCountries();
