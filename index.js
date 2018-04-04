@@ -139,7 +139,7 @@ function convertToConfig(cities, group_keys) {
 // set margins
 var margins = {
     top: 20,
-    right: 40,
+    right: 20,
     bottom: 65,
     left: 65
 };
@@ -257,6 +257,10 @@ function render(config, onClick) {
             
 
     // update
+    update
+        .select('.bar')
+        .on('click', (d) => onClick(d));
+
     update
         .transition(t)
         .attr('transform', function(d) {
